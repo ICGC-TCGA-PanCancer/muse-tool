@@ -65,7 +65,11 @@ doc: |
     #### Input aligned tumor / normal BAM files
 
     The workflow uses a pair of aligned BAM files as input, one BAM for tumor, the other for normal,
-    both from the same donor. Here we assume file names are *tumor_sample.bam* and *normal_sample.bam*,
+    both from the same donor. For improved calling result we pre-process the aligned BAMs using PCAWG GATK
+    Co-cleaning workflow, see [here](https://dockstore.org/workflows/ICGC-TCGA-PanCancer/pcawg-gatk-cocleaning)
+    for more information how to run it.
+
+    Here we assume aligned pre-processed BAMs are *tumor_sample.bam* and *normal_sample.bam*,
     and are under *bams* subfolder.
 
     #### Reference data files
