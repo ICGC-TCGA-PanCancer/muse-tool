@@ -9,6 +9,7 @@ import logging
 import subprocess
 import tempfile
 from multiprocessing import Pool
+from multiprocessing import cpu_count
 from argparse import ArgumentParser
 
 def which(cmd):
@@ -177,7 +178,7 @@ if __name__ == "__main__":
 tabix indexed and based on the same reference
 genome used in 'MuSE call'""")
 
-    parser.add_argument("-n", "--cpus", type=int, default=8)
+    parser.add_argument("-n", "--cpus", type=int, default=cpu_count())
     parser.add_argument("-w", "--workdir", default="/tmp")
     parser.add_argument("--no-clean", action="store_true", default=False)
     parser.add_argument("--mode", choices=["wgs", "wxs"], default="wgs")
