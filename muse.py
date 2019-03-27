@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 import sys
-import re
 import os
 import string
 import shutil
@@ -11,6 +10,7 @@ import tempfile
 from multiprocessing import Pool
 from multiprocessing import cpu_count
 from argparse import ArgumentParser
+from datetime import datetime
 
 def which(cmd):
     cmd = ["which",cmd]
@@ -64,6 +64,27 @@ def call_cmd_iter(muse, ref_seq, block_size, tumor_bam, normal_bam, contaminatio
             )
             yield cmd, "%s.%s.MuSE.txt" % (output_base, i)
 
+def get_sm_from_bam(bam):
+    # retrieve the @RG from BAM header
+    try:
+        header = subprocess.check_output(['samtools', 'view', '-H', bam])
+    except Exception as e:
+        sys.exit('\n%s: Retrieve BAM header failed: %s' % (e, bam))
+
+    # get @RG
+    header_array = header.decode('utf-8').rstrip().split('\n')
+    sm = set()
+
+    for line in header_array:
+        if not line.startswith("@RG"): continue
+        rg_array = line.rstrip().split('\t')[1:]
+        for element in rg_array:
+            if not element.startswith('SM'): continue
+            sm.add(element.rstrip().split(':')[1:])
+
+    if not len(sm) == 1: sys.exit("\nMultiple different SM entries %s:" % ":".join(list(sm)))
+    return sm.pop
+
 def run_muse(args):
 
     mode_flag = ""
@@ -78,6 +99,14 @@ def run_muse(args):
         args.muse = which(args.muse)
 
     workdir = os.path.abspath(tempfile.mkdtemp(dir=args.workdir, prefix="muse_work_"))
+
+    if args.O is None:
+        sm = get_sm_from_bam(args.tumor_bam)
+    else:
+        sm = args.O
+    dateString = datetime.now().strftime("%Y%m%d")
+    output_vcf = '.'.join([sm, args.muse+"-vcf", dateString, "somatic", "snv_mnv", "vcf"])
+
 
     if not os.path.exists(args.f + ".fai"):
         new_ref = os.path.join(workdir, "ref_genome.fasta")
@@ -156,10 +185,25 @@ def run_muse(args):
     cmd_caller(sump_cmd)
 
     if args.muse.endswith("MuSEv0.9.9.5"):
-        subprocess.check_call( ["/opt/bin/vcf_reformat.py", tmp_out, "-o", args.O,
+        subprocess.check_call( ["/opt/bin/vcf_reformat.py", tmp_out, "-o", output_vcf,
             "-b", "TUMOR", args.tumor_bam, "-b", "NORMAL", args.normal_bam] )
     else:
-        shutil.copy(tmp_out, args.O)
+        shutil.copy(tmp_out, output_vcf)
+
+    # gzip and generate tbi file for vcf
+    try:
+        subprocess.check_call(["/usr/bin/bgzip", "-c", output_vcf])
+        subprocess.check_call(["/usr/bin/tabix", "-p", "vcf", output_vcf+".gz"])
+    except Exception as e:
+        sys.exit('\n%s: bgzip and tabix failed: %s' % (e, output_vcf))
+
+    # generate the md5 for vcf and tbi files
+    try:
+        subprocess.check_call(["zcat", output_vcf+".gz", "|", "md5sum", "|", "cut", "-b", "1-33", ">", output_vcf+".gz.md5"])
+        subprocess.check_call(
+            ["zcat", output_vcf + ".gz.tbi", "|", "md5sum", "|", "cut", "-b", "1-33", ">", output_vcf + ".gz.tbi.md5"])
+    except Exception as e:
+        sys.exit('\n%s: md5sum generation failed' % e)
 
     if not args.no_clean:
         shutil.rmtree(workdir)
@@ -173,11 +217,15 @@ if __name__ == "__main__":
     #parser.add_argument("-l", help="list of regions (chr:pos-pos or BED), one region per line")
     parser.add_argument("-p", type=float, help="normal data contamination rate [0.050]", default=0.05)
     parser.add_argument("-b", type=long, help="Parallel Block Size", default=50000000)
-    parser.add_argument("-O", help="output file name (VCF)", default="out.vcf")
-    parser.add_argument("-D", help="""dbSNP vcf file that should be bgzip compressed,
-tabix indexed and based on the same reference
-genome used in 'MuSE call'""")
-
+    parser.add_argument("-O", "--run_id", type=str, help="The output vcf file will be named following \
+                        the convention: \
+                        <run_id>.<workflowName>.<dateString>.somatic.snv_mnv.vcf.gz \
+                        Otherwise the output vcf file will be named automatically \
+                        following the pattern: \
+                        <SM>.<workflowName>.<dateString>.somatic.snv_mnv.vcf.gz \
+                        where SM is extracted from the @RG line in the tumor BAM header.")
+    parser.add_argument("-D", help="""dbSNP vcf file that should be bgzip compressed, \
+                        tabix indexed and based on the same reference genome used in 'MuSE call'""")
     parser.add_argument("-n", "--cpus", type=int, default=cpu_count())
     parser.add_argument("-w", "--workdir", default="/tmp")
     parser.add_argument("--no-clean", action="store_true", default=False)
