@@ -80,7 +80,7 @@ def get_sm_from_bam(bam):
         rg_array = line.rstrip().split('\t')[1:]
         for element in rg_array:
             if not element.startswith('SM'): continue
-            sm.add(element.rstrip().split(':')[1:])
+            sm.add(element.rstrip().split(':')[1])
 
     if not len(sm) == 1: sys.exit("\nMultiple different SM entries %s:" % ":".join(list(sm)))
     return sm.pop
