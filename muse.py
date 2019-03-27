@@ -83,7 +83,30 @@ def get_sm_from_bam(bam):
             sm.add(element.rstrip().split(':')[1])
 
     if not len(sm) == 1: sys.exit("\nMultiple different SM entries %s:" % ":".join(list(sm)))
-    return sm.pop
+    return sm.pop()
+
+def execute(cmd):
+    print "RUNNING...\n", cmd, "\n"
+    process = subprocess.Popen(cmd,
+                               shell=True,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+
+    while True:
+        nextline = process.stdout.readline()
+        if nextline == '' and process.poll() is not None:
+            break
+        sys.stdout.write(nextline)
+        sys.stdout.flush()
+
+    stderr = process.communicate()[1]
+    if process.returncode != 0:
+        print "[ERROR] command:", cmd, "exited with code:", process.returncode
+        print stderr
+        raise RuntimeError
+
+    return process.returncode
+
 
 def run_muse(args):
 
@@ -105,7 +128,7 @@ def run_muse(args):
     else:
         sm = args.run_id
     dateString = datetime.now().strftime("%Y%m%d")
-    output_vcf = '.'.join([sm, args.muse.replace('.', '-'), dateString, "somatic", "snv_mnv", "vcf"])
+    output_vcf = '.'.join([sm, args.muse.replace(".", "-"), dateString, "somatic", "snv_mnv", "vcf"])
 
 
     if not os.path.exists(args.f + ".fai"):
@@ -191,19 +214,10 @@ def run_muse(args):
         shutil.copy(tmp_out, output_vcf)
 
     # gzip and generate tbi file for vcf
-    try:
-        subprocess.check_call(["/usr/bin/bgzip", "-c", output_vcf])
-        subprocess.check_call(["/usr/bin/tabix", "-p", "vcf", output_vcf+".gz"])
-    except Exception as e:
-        sys.exit('\n%s: bgzip and tabix failed: %s' % (e, output_vcf))
-
-    # generate the md5 for vcf and tbi files
-    try:
-        subprocess.check_call(["zcat", output_vcf+".gz", "|", "md5sum", "|", "cut", "-b", "1-33", ">", output_vcf+".gz.md5"])
-        subprocess.check_call(
-            ["zcat", output_vcf + ".gz.tbi", "|", "md5sum", "|", "cut", "-b", "1-33", ">", output_vcf + ".gz.tbi.md5"])
-    except Exception as e:
-        sys.exit('\n%s: md5sum generation failed' % e)
+    execute("/usr/bin/bgzip -c {0} > {0}.gz".format(output_vcf))
+    execute("/usr/bin/tabix -p vcf {0}.gz".format(output_vcf))
+    execute("cat {0}.gz | md5sum | cut -b 1-33 > {0}.gz.md5".format(output_vcf))
+    execute("cat {0}.gz.tbi | md5sum | cut -b 1-33 > {0}.gz.tbi.md5".format(output_vcf))
 
     if not args.no_clean:
         shutil.rmtree(workdir)
