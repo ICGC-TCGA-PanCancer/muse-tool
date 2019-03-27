@@ -100,12 +100,12 @@ def run_muse(args):
 
     workdir = os.path.abspath(tempfile.mkdtemp(dir=args.workdir, prefix="muse_work_"))
 
-    if args.O is None:
+    if args.run_id is None:
         sm = get_sm_from_bam(args.tumor_bam)
     else:
-        sm = args.O
+        sm = args.run_id
     dateString = datetime.now().strftime("%Y%m%d")
-    output_vcf = '.'.join([sm, args.muse+"-vcf", dateString, "somatic", "snv_mnv", "vcf"])
+    output_vcf = '.'.join([sm, args.muse.replace('.', '-'), dateString, "somatic", "snv_mnv", "vcf"])
 
 
     if not os.path.exists(args.f + ".fai"):
@@ -217,7 +217,7 @@ if __name__ == "__main__":
     #parser.add_argument("-l", help="list of regions (chr:pos-pos or BED), one region per line")
     parser.add_argument("-p", type=float, help="normal data contamination rate [0.050]", default=0.05)
     parser.add_argument("-b", type=long, help="Parallel Block Size", default=50000000)
-    parser.add_argument("-O", "--run_id", type=str, help="The output vcf file will be named following \
+    parser.add_argument("--run-id", dest="run_id", type=str, help="The output vcf file will be named following \
                         the convention: \
                         <run_id>.<workflowName>.<dateString>.somatic.snv_mnv.vcf.gz \
                         Otherwise the output vcf file will be named automatically \

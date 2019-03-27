@@ -22,6 +22,8 @@ inputs:
     type: File
     inputBinding:
       prefix: -f
+    secondaryFiles:
+      - .fai
   known:
     type: File
     inputBinding:
@@ -37,7 +39,7 @@ inputs:
   run-id:
     type: string?
     inputBinding:
-      prefix: -O
+      prefix: --run-id
 
 
 outputs:
