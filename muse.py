@@ -110,6 +110,13 @@ def execute(cmd):
 
 def run_muse(args):
 
+    if args.run_id is None:
+        sm = get_sm_from_bam(args.tumor_bam)
+    else:
+        sm = args.run_id
+    dateString = datetime.now().strftime("%Y%m%d")
+    output_vcf = '.'.join([sm, args.muse.replace(".", "-"), dateString, "somatic", "snv_mnv", "vcf"])
+
     mode_flag = ""
     if args.muse.endswith("MuSEv1.0rc"):
         args.p = None
@@ -122,14 +129,6 @@ def run_muse(args):
         args.muse = which(args.muse)
 
     workdir = os.path.abspath(tempfile.mkdtemp(dir=args.workdir, prefix="muse_work_"))
-
-    if args.run_id is None:
-        sm = get_sm_from_bam(args.tumor_bam)
-    else:
-        sm = args.run_id
-    dateString = datetime.now().strftime("%Y%m%d")
-    output_vcf = '.'.join([sm, args.muse.replace(".", "-"), dateString, "somatic", "snv_mnv", "vcf"])
-
 
     if not os.path.exists(args.f + ".fai"):
         new_ref = os.path.join(workdir, "ref_genome.fasta")
