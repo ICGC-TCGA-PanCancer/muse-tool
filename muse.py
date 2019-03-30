@@ -2,6 +2,7 @@
 
 import sys
 import os
+import re
 import string
 import shutil
 import logging
@@ -114,6 +115,12 @@ def run_muse(args):
         sm = get_sm_from_bam(args.tumor_bam)
     else:
         sm = args.run_id
+
+    reg = re.compile('^[a-zA-Z0-9_-]+$')
+    if not reg.match(sm):
+        sys.exit('\nrun-id contains invalid character: %s\n' % sm)
+    else:
+        print "run-id:", sm
     dateString = datetime.now().strftime("%Y%m%d")
     output_vcf = '.'.join([sm, args.muse.replace(".", "-"), dateString, "somatic", "snv_mnv", "vcf"])
 
