@@ -85,7 +85,7 @@ def get_sm_from_bam(bam):
             value = "".join([ c if re.match(r"[a-zA-Z\-_]", c) else "_" for c in value ])
             sm.add(value)
 
-    if not len(sm) == 1: sys.exit("\nDo not support multiple different SM entries %s:" % ", ".join(list(sm)))
+    if not len(sm) == 1: sys.exit("\nDo not support multiple different SM entries, or no SM: %s:" % ", ".join(list(sm)))
     return sm.pop()
 
 def execute(cmd):
