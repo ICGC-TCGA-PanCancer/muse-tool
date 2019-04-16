@@ -82,6 +82,7 @@ def get_sm_from_bam(bam):
         for element in rg_array:
             if not element.startswith('SM'): continue
             value = element.replace("SM:","")
+            value = "".join([ c if re.match(r"[a-zA-Z\-_]", c) else "_" for c in value ])
             sm.add(value)
 
     if not len(sm) == 1: sys.exit("\nDo not support multiple different SM entries, or no SM: %s:" % ", ".join(list(sm)))
@@ -117,8 +118,11 @@ def run_muse(args):
     else:
         sm = args.run_id
 
-    sm = "".join([c if re.match(r"[a-zA-Z0-9\-_]", c) else "_" for c in sm])
-    print "run-id:", sm
+    reg = re.compile('^[a-zA-Z0-9_-]+$')
+    if not reg.match(sm):
+        sys.exit('\nrun-id contains invalid character: %s\n' % sm)
+    else:
+        print "run-id:", sm
     dateString = datetime.now().strftime("%Y%m%d")
     output_vcf = '.'.join([sm, args.muse.replace(".", "-"), dateString, "somatic", "snv_mnv", "vcf"])
 
