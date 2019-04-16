@@ -65,7 +65,7 @@ def call_cmd_iter(muse, ref_seq, block_size, tumor_bam, normal_bam, contaminatio
             )
             yield cmd, "%s.%s.MuSE.txt" % (output_base, i)
 
-def get_sm_from_bam(bam):
+def get_run_id_from_sm_in_bam(bam):
     # retrieve the @RG from BAM header
     try:
         header = subprocess.check_output(['samtools', 'view', '-H', bam])
@@ -82,7 +82,7 @@ def get_sm_from_bam(bam):
         for element in rg_array:
             if not element.startswith('SM'): continue
             value = element.replace("SM:","")
-            value = "".join([ c if re.match(r"[a-zA-Z\-_]", c) else "_" for c in value ])
+            value = "".join([ c if re.match(r"[a-zA-Z0-9\-_]", c) else "_" for c in value ])
             sm.add(value)
 
     if not len(sm) == 1: sys.exit("\nDo not support multiple different SM entries, or no SM: %s:" % ", ".join(list(sm)))
@@ -114,7 +114,7 @@ def execute(cmd):
 def run_muse(args):
 
     if args.run_id is None:
-        sm = get_sm_from_bam(args.tumor_bam)
+        sm = get_run_id_from_sm_in_bam(args.tumor_bam)
     else:
         sm = args.run_id
 
