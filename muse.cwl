@@ -1,10 +1,10 @@
 class: CommandLineTool
 label: MuSE
 cwlVersion: v1.0
-baseCommand: [/opt/bin/muse.py, -O, muse.vcf, -w, ./, --muse, MuSEv1.0rc]
+baseCommand: [/opt/bin/muse.py, -w, ./, --muse, MuSEv1.0rc]
 requirements:
   - class: "DockerRequirement"
-    dockerPull: "quay.io/pancancer/pcawg-muse:0.1.2"
+    dockerPull: "quay.io/pancancer/pcawg-muse:standard-output-names"
 inputs:
   tumor:
     type: File
@@ -22,6 +22,8 @@ inputs:
     type: File
     inputBinding:
       prefix: -f
+    secondaryFiles:
+      - .fai
   known:
     type: File
     inputBinding:
@@ -30,11 +32,27 @@ inputs:
     type: {"type": "enum", "name": "Mode", "symbols": ["wgs", "wxs"]}
     inputBinding:
       prefix: --mode
+  coreNum:
+    type: int?
+    inputBinding:
+      prefix: -n
+  run-id:
+    type: string?
+    inputBinding:
+      prefix: --run-id
+
+
 outputs:
-  mutations:
+  somatic_snv_mnv_vcf_gz:
     type: File
     outputBinding:
-      glob: muse.vcf
+      glob: '*.somatic.snv_mnv.vcf.gz'
+    secondaryFiles:
+    - .md5
+    - .tbi
+    - .tbi.md5
+
+
 doc: |
     PCAWG MuSE variant calling workflow is developed by MD Anderson Cancer Center
     (http://bioinformatics.mdanderson.org/main/MuSE), it consists of software component calling structural

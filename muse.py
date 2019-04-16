@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 
 import sys
-import re
 import os
+import re
 import string
 import shutil
 import logging
 import subprocess
 import tempfile
 from multiprocessing import Pool
+from multiprocessing import cpu_count
 from argparse import ArgumentParser
+from datetime import datetime
 
 def which(cmd):
     cmd = ["which",cmd]
@@ -63,7 +65,66 @@ def call_cmd_iter(muse, ref_seq, block_size, tumor_bam, normal_bam, contaminatio
             )
             yield cmd, "%s.%s.MuSE.txt" % (output_base, i)
 
+def get_run_id_from_sm_in_bam(bam):
+    # retrieve the @RG from BAM header
+    try:
+        header = subprocess.check_output(['samtools', 'view', '-H', bam])
+    except Exception as e:
+        sys.exit('\n%s: Retrieve BAM header failed: %s' % (e, bam))
+
+    # get @RG
+    header_array = header.decode('utf-8').rstrip().split('\n')
+    sm = set()
+
+    for line in header_array:
+        if not line.startswith("@RG"): continue
+        rg_array = line.rstrip().split('\t')[1:]
+        for element in rg_array:
+            if not element.startswith('SM'): continue
+            value = element.replace("SM:","")
+            value = "".join([ c if re.match(r"[a-zA-Z0-9\-_]", c) else "_" for c in value ])
+            sm.add(value)
+
+    if not len(sm) == 1: sys.exit("\nDo not support multiple different SM entries, or no SM: %s:" % ", ".join(list(sm)))
+    return sm.pop()
+
+def execute(cmd):
+    print "RUNNING...\n", cmd, "\n"
+    process = subprocess.Popen(cmd,
+                               shell=True,
+                               stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE)
+
+    while True:
+        nextline = process.stdout.readline()
+        if nextline == '' and process.poll() is not None:
+            break
+        sys.stdout.write(nextline)
+        sys.stdout.flush()
+
+    stderr = process.communicate()[1]
+    if process.returncode != 0:
+        print "[ERROR] command:", cmd, "exited with code:", process.returncode
+        print stderr
+        raise RuntimeError
+
+    return process.returncode
+
+
 def run_muse(args):
+
+    if args.run_id is None:
+        sm = get_run_id_from_sm_in_bam(args.tumor_bam)
+    else:
+        sm = args.run_id
+
+    reg = re.compile('^[a-zA-Z0-9_-]+$')
+    if not reg.match(sm):
+        sys.exit('\nrun-id contains invalid character: %s\n' % sm)
+    else:
+        print "run-id:", sm
+    dateString = datetime.now().strftime("%Y%m%d")
+    output_vcf = '.'.join([sm, args.muse.replace(".", "-"), dateString, "somatic", "snv_mnv", "vcf"])
 
     mode_flag = ""
     if args.muse.endswith("MuSEv1.0rc"):
@@ -155,10 +216,16 @@ def run_muse(args):
     cmd_caller(sump_cmd)
 
     if args.muse.endswith("MuSEv0.9.9.5"):
-        subprocess.check_call( ["/opt/bin/vcf_reformat.py", tmp_out, "-o", args.O,
+        subprocess.check_call( ["/opt/bin/vcf_reformat.py", tmp_out, "-o", output_vcf,
             "-b", "TUMOR", args.tumor_bam, "-b", "NORMAL", args.normal_bam] )
     else:
-        shutil.copy(tmp_out, args.O)
+        shutil.copy(tmp_out, output_vcf)
+
+    # gzip and generate tbi file for vcf
+    execute("/usr/bin/bgzip -c {0} > {0}.gz".format(output_vcf))
+    execute("/usr/bin/tabix -p vcf {0}.gz".format(output_vcf))
+    execute("cat {0}.gz | md5sum | cut -b 1-33 > {0}.gz.md5".format(output_vcf))
+    execute("cat {0}.gz.tbi | md5sum | cut -b 1-33 > {0}.gz.tbi.md5".format(output_vcf))
 
     if not args.no_clean:
         shutil.rmtree(workdir)
@@ -172,12 +239,16 @@ if __name__ == "__main__":
     #parser.add_argument("-l", help="list of regions (chr:pos-pos or BED), one region per line")
     parser.add_argument("-p", type=float, help="normal data contamination rate [0.050]", default=0.05)
     parser.add_argument("-b", type=long, help="Parallel Block Size", default=50000000)
-    parser.add_argument("-O", help="output file name (VCF)", default="out.vcf")
-    parser.add_argument("-D", help="""dbSNP vcf file that should be bgzip compressed,
-tabix indexed and based on the same reference
-genome used in 'MuSE call'""")
-
-    parser.add_argument("-n", "--cpus", type=int, default=8)
+    parser.add_argument("--run-id", dest="run_id", type=str, help="The output vcf file will be named following \
+                        the convention: \
+                        <run_id>.<workflowName>.<dateString>.somatic.snv_mnv.vcf.gz \
+                        Otherwise the output vcf file will be named automatically \
+                        following the pattern: \
+                        <SM>.<workflowName>.<dateString>.somatic.snv_mnv.vcf.gz \
+                        where SM is extracted from the @RG line in the tumor BAM header.")
+    parser.add_argument("-D", help="""dbSNP vcf file that should be bgzip compressed, \
+                        tabix indexed and based on the same reference genome used in 'MuSE call'""")
+    parser.add_argument("-n", "--cpus", type=int, default=cpu_count())
     parser.add_argument("-w", "--workdir", default="/tmp")
     parser.add_argument("--no-clean", action="store_true", default=False)
     parser.add_argument("--mode", choices=["wgs", "wxs"], default="wgs")
