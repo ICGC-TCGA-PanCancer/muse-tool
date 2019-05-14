@@ -4,7 +4,7 @@ cwlVersion: v1.0
 baseCommand: [/opt/bin/muse.py, -w, ./, --muse, MuSEv1.0rc]
 requirements:
   - class: "DockerRequirement"
-    dockerPull: "quay.io/pancancer/pcawg-muse:standard-output-names"
+    dockerPull: "quay.io/pancancer/pcawg-muse:0.2.0"
 inputs:
   tumor:
     type: File
